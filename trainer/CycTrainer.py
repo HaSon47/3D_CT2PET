@@ -18,6 +18,7 @@ from .transformer import Transformer_2D
 from skimage import measure
 import numpy as np
 import cv2
+from tqdm import tqdm
 
 class Cyc_Trainer():
     def __init__(self, config):
@@ -29,7 +30,7 @@ class Cyc_Trainer():
         self.optimizer_D_B = torch.optim.Adam(self.netD_B.parameters(), lr=config['lr'], betas=(0.5, 0.999))
         
         if config['regist']:
-            self.R_A = Reg(config['size'], config['size'],config['input_nc'],config['input_nc']).cuda()
+            self.R_A = Reg(config['size'][0], config['size'][1],config['input_nc'],config['input_nc']).cuda()
             self.spatial_transform = Transformer_2D().cuda()
             self.optimizer_R_A = torch.optim.Adam(self.R_A.parameters(), lr=config['lr'], betas=(0.5, 0.999))
         if config['bidirect']:
@@ -48,10 +49,11 @@ class Cyc_Trainer():
 
         # Inputs & targets memory allocation
         Tensor = torch.cuda.FloatTensor if config['cuda'] else torch.Tensor
-        self.input_A = Tensor(config['batchSize'], config['input_nc'], config['size'], config['size'])
-        self.input_B = Tensor(config['batchSize'], config['output_nc'], config['size'], config['size'])
-        self.target_real = Variable(Tensor(1,1).fill_(1.0), requires_grad=False)
-        self.target_fake = Variable(Tensor(1,1).fill_(0.0), requires_grad=False)
+        self.input_A = Tensor(config['batchSize'], config['input_nc'], config['size'][0], config['size'][1])
+        self.input_B = Tensor(config['batchSize'], config['output_nc'], config['size'][0], config['size'][1])
+        self.target_real = Variable(Tensor(config['batchSize'],1).fill_(1.0), requires_grad=False)
+        self.target_fake = Variable(Tensor(config['batchSize'],1).fill_(0.0), requires_grad=False)
+
 
         self.fake_A_buffer = ReplayBuffer()
         self.fake_B_buffer = ReplayBuffer()
@@ -59,33 +61,29 @@ class Cyc_Trainer():
         #Dataset loader
         level = config['noise_level']  # set noise level
         
-        transforms_1 = [ToPILImage(),
-                   RandomAffine(degrees=level,translate=[0.02*level, 0.02*level],scale=[1-0.02*level, 1+0.02*level],fillcolor=-1),
-                   ToTensor(),
-                   Resize(size_tuple = (config['size'], config['size']))]
-    
-        transforms_2 = [ToPILImage(),
-                   RandomAffine(degrees=1,translate=[0.02, 0.02],scale=[0.98, 1.02],fillcolor=-1),
-                   ToTensor(),
-                   Resize(size_tuple = (config['size'], config['size']))]
 
-        self.dataloader = DataLoader(ImageDataset(config['dataroot'], level, transforms_1=transforms_1, transforms_2=transforms_2, unaligned=False,),
-                                batch_size=config['batchSize'], shuffle=True, num_workers=config['n_cpu'])
+        self.dataloader = DataLoader(ImageDataset(config['dataroot']),
+                                batch_size=config['batchSize'], shuffle=True, num_workers=config['n_cpu'], drop_last=True)
 
         val_transforms = [ToTensor(),
-                          Resize(size_tuple = (config['size'], config['size']))]
+                          Resize(size_tuple = (config['size'][0], config['size'][1]))]
         
-        self.val_data = DataLoader(ValDataset(config['val_dataroot'], transforms_ =val_transforms, unaligned=False),
-                                batch_size=config['batchSize'], shuffle=False, num_workers=config['n_cpu'])
+        self.val_data = DataLoader(ValDataset(config['val_dataroot']),
+                                batch_size=config['batchSize'], shuffle=False, num_workers=config['n_cpu'], drop_last=True)
+        
+        # where to log
+        os.makedirs(os.path.dirname(self.config["val_log_path"]), exist_ok=True)
 
  
-       # Loss plot
-        self.logger = Logger(config['name'],config['port'],config['n_epochs'], len(self.dataloader))       
+    #    # Loss plot
+    #     self.logger = Logger(config['name'],config['port'],config['n_epochs'], len(self.dataloader))       
         
     def train(self):
         ###### Training ######
         for epoch in range(self.config['epoch'], self.config['n_epochs']):
-            for i, batch in enumerate(self.dataloader):
+
+            tbar = tqdm(enumerate(self.dataloader), total=len(self.dataloader), desc=f"Epoch {epoch}/{self.config['n_epochs']}", leave=True)
+            for i, batch in tbar:
                 # Set model input
                 real_A = Variable(self.input_A.copy_(batch['A']))
                 real_B = Variable(self.input_B.copy_(batch['B']))
@@ -270,9 +268,10 @@ class Cyc_Trainer():
                         self.optimizer_D_B.step()
                         ###################################
 
-
-                self.logger.log({'loss_D_B': loss_D_B,'SR_loss':SR_loss},
-                       images={'real_A': real_A, 'real_B': real_B, 'fake_B': fake_B})#,'SR':SysRegist_A2B
+                # print(self.MAE(fake_B, real_B))
+                # self.logger.log({'loss_D_B': loss_D_B,'SR_loss':SR_loss},
+                #        images={'real_A': real_A, 'real_B': real_B, 'fake_B': fake_B})#,'SR':SysRegist_A2B
+            tbar.close()
 
     #         # Save models checkpoints
             if not os.path.exists(self.config["save_root"]):
@@ -283,7 +282,20 @@ class Cyc_Trainer():
             #torch.save(netD_B.state_dict(), 'output/netD_B_3D.pth')
             
             
-            #############val###############
+            # #############val###############
+            # with torch.no_grad():
+            #     MAE = 0
+            #     num = 0
+            #     for i, batch in enumerate(self.val_data):
+            #         real_A = Variable(self.input_A.copy_(batch['A']))
+            #         real_B = Variable(self.input_B.copy_(batch['B'])).detach().cpu().numpy().squeeze()
+            #         fake_B = self.netG_A2B(real_A).detach().cpu().numpy().squeeze()
+            #         mae = self.MAE(fake_B,real_B)
+            #         MAE += mae
+            #         num += 1
+
+            #     print ('Val MAE:',MAE/num)
+
             with torch.no_grad():
                 MAE = 0
                 num = 0
@@ -291,11 +303,16 @@ class Cyc_Trainer():
                     real_A = Variable(self.input_A.copy_(batch['A']))
                     real_B = Variable(self.input_B.copy_(batch['B'])).detach().cpu().numpy().squeeze()
                     fake_B = self.netG_A2B(real_A).detach().cpu().numpy().squeeze()
-                    mae = self.MAE(fake_B,real_B)
+                    mae = self.MAE(fake_B, real_B)
                     MAE += mae
                     num += 1
 
-                print ('Val MAE:',MAE/num)
+                val_mae = MAE / num
+                print('Val MAE:', val_mae)
+
+                # Lưu vào file
+                with open(self.config["val_log_path"], "a") as f:
+                    f.write(f"Epoch {epoch}: Val MAE = {val_mae}\n")
                 
                     
                          
@@ -334,10 +351,26 @@ class Cyc_Trainer():
            return 20 * np.log10(PIXEL_MAX / np.sqrt(mse))
             
             
-    def MAE(self,fake,real):
-        x,y = np.where(real!= -1)  # Exclude background
-        mae = np.abs(fake[x,y]-real[x,y]).mean()
-        return mae/2     #from (-1,1) normaliz  to (0,1)
+    # def MAE(self,fake,real):
+    #     x,y = np.where(real!= -1)  # Exclude background
+    #     mae = np.abs(fake[x,y]-real[x,y]).mean()
+    #     return mae/2     #from (-1,1) normaliz  to (0,1)
+    def MAE(self, fake, real):
+        batch_size = real.shape[0]
+        maes = []
+        for i in range(batch_size):
+            x, y = np.where(real[i] != -1)  # Xử lý từng ảnh trong batch
+            mae = np.abs(fake[i, x, y] - real[i, x, y]).mean()
+            maes.append(mae)
+        return np.mean(maes) / 2  # Chuyển từ (-1,1) về (0,1)
+
+
+    # def MAE(self, fake, real):
+    #     mask = real != -1  # Tạo mask trên GPU
+    #     mae = torch.abs(fake[mask] - real[mask]).mean()
+    #     return (mae / 2).item()  # Chuyển về giá trị float
+
+
             
 
     def save_deformation(self,defms,root):

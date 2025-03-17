@@ -107,3 +107,4 @@ output/B/
 
 # model checkpoints
 *.pth
+Checkpoint/*
