@@ -4,9 +4,10 @@ bidirect: False #Unidirectional or bidirectional
 regist: True    # With or without registration network
 noise_level: 1  #  noise level
 port: 6019   #  port parameters
-save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/' #Cyc + NC+R
+save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/try2/' #Cyc + NC+R
+log_root: './output/log/'
 image_save: './output/img/'
-val_log_path: './output/log.txt'
+val_log_path: './output/log2.txt'
 
 # lamda weight
 Adv_lamda: 1
@@ -22,7 +23,7 @@ dataroot: '/home/PET-CT/hachi/pet_phase2/train/'     # root directory of the dat
 val_dataroot: '/home/PET-CT/hachi/pet_phase2/val/'
 lr: 0.0001                   # initial learning rate
 decay_epoch: 20            # epoch to start linearly decaying the learning rate to 0
-size: [256,256]                # size of the data crop
+size: 256                # size of the data crop
 input_nc: 1         
 output_nc: 1                  
 cuda: True                

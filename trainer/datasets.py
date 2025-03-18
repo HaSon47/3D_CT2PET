@@ -36,8 +36,8 @@ class ImageDataset(Dataset):
         B_image = (B_image * 2.0) - 1.0
 
         # Resize
-        A_image = self.resize_and_pad(A_image)
-        B_image = self.resize_and_pad(B_image)
+        A_image = self.pad_to_same_size(A_image)
+        B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -49,27 +49,19 @@ class ImageDataset(Dataset):
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
    
-    def resize_and_pad(self, img, target_size=(256, 256), pad_value=0):
+    def pad_to_same_size(self, img, target_size=512, pad_value=0):
+        
         h, w = img.shape
-        target_h, target_w = target_size
+        new_size = max(target_size, h,w)
 
-        # Nếu ảnh lớn hơn target_size -> Resize
-        if h > target_h or w > target_w:
-            img = cv2.resize(img, (min(w, target_w), min(h, target_h)), interpolation=cv2.INTER_LINEAR)
-
-        # Tạo ảnh mới có kích thước target_size và điền giá trị pad_value
-        padded_img = np.full((target_h, target_w), pad_value, dtype=img.dtype)
+        # pad to all have new_size
+        padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
+        # align center
+        start_h = (new_size - h)//2
+        start_w = (new_size - w)//2
+        padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        # Lấy kích thước mới của ảnh sau khi resize
-        new_h, new_w = img.shape
-        
-        # Chèn ảnh vào giữa (align center)
-        start_h = (target_h - new_h) // 2
-        start_w = (target_w - new_w) // 2
-        padded_img[start_h:start_h + new_h, start_w:start_w + new_w] = img
-
-        return padded_img
-    
+        return padded_img   
 
 
 class ValDataset(Dataset):
@@ -98,8 +90,8 @@ class ValDataset(Dataset):
         B_image = (B_image * 2.0) - 1.0
 
         # Resize
-        A_image = self.resize_and_pad(A_image)
-        B_image = self.resize_and_pad(B_image)
+        A_image = self.pad_to_same_size(A_image)
+        B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -111,24 +103,17 @@ class ValDataset(Dataset):
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
     
-    def resize_and_pad(self, img, target_size=(256, 256), pad_value=0):
+    def pad_to_same_size(self, img, target_size=512, pad_value=0):
+        
         h, w = img.shape
-        target_h, target_w = target_size
+        new_size = max(target_size, h,w)
 
-        # Nếu ảnh lớn hơn target_size -> Resize
-        if h > target_h or w > target_w:
-            img = cv2.resize(img, (min(w, target_w), min(h, target_h)), interpolation=cv2.INTER_LINEAR)
-
-        # Tạo ảnh mới có kích thước target_size và điền giá trị pad_value
-        padded_img = np.full((target_h, target_w), pad_value, dtype=img.dtype)
+        # pad to all have new_size
+        padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
+        # align center
+        start_h = (new_size - h)//2
+        start_w = (new_size - w)//2
+        padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        # Lấy kích thước mới của ảnh sau khi resize
-        new_h, new_w = img.shape
-        
-        # Chèn ảnh vào giữa (align center)
-        start_h = (target_h - new_h) // 2
-        start_w = (target_w - new_w) // 2
-        padded_img[start_h:start_h + new_h, start_w:start_w + new_w] = img
-
-        return padded_img
+        return padded_img   
     
