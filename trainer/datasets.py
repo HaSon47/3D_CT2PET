@@ -15,7 +15,6 @@ import cv2
 class ImageDataset(Dataset):
     def __init__(self, root):
         self.transform = transforms.Compose([
-            transforms.Resize(256),
             transforms.ToTensor()
         ])
         self.files_A = sorted(glob.glob("%s/A/*" % root))
@@ -35,9 +34,9 @@ class ImageDataset(Dataset):
         A_image = (A_image * 2.0) - 1.0
         B_image = (B_image * 2.0) - 1.0
 
-        # Resize
-        A_image = self.pad_to_same_size(A_image)
-        B_image = self.pad_to_same_size(B_image)
+        # # Resize
+        # A_image = self.pad_to_same_size(A_image)
+        # B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -49,25 +48,24 @@ class ImageDataset(Dataset):
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
    
-    def pad_to_same_size(self, img, target_size=512, pad_value=0):
+    # def pad_to_same_size(self, img, target_size=512, pad_value=0):
         
-        h, w = img.shape
-        new_size = max(target_size, h,w)
+    #     h, w = img.shape
+    #     new_size = max(target_size, h,w)
 
-        # pad to all have new_size
-        padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
-        # align center
-        start_h = (new_size - h)//2
-        start_w = (new_size - w)//2
-        padded_img[start_h:start_h + h, start_w: start_w + w] = img
+    #     # pad to all have new_size
+    #     padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
+    #     # align center
+    #     start_h = (new_size - h)//2
+    #     start_w = (new_size - w)//2
+    #     padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        return padded_img   
+    #     return padded_img   
 
 
 class ValDataset(Dataset):
     def __init__(self, root):
         self.transform = transforms.Compose([
-            transforms.Resize(256),
             transforms.ToTensor()
         ])
         self.files_A = sorted(glob.glob("%s/A/*" % root))
@@ -89,9 +87,9 @@ class ValDataset(Dataset):
         A_image = (A_image * 2.0) - 1.0
         B_image = (B_image * 2.0) - 1.0
 
-        # Resize
-        A_image = self.pad_to_same_size(A_image)
-        B_image = self.pad_to_same_size(B_image)
+        # # Resize
+        # A_image = self.pad_to_same_size(A_image)
+        # B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -103,17 +101,17 @@ class ValDataset(Dataset):
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
     
-    def pad_to_same_size(self, img, target_size=512, pad_value=0):
+    # def pad_to_same_size(self, img, target_size=512, pad_value=0):
         
-        h, w = img.shape
-        new_size = max(target_size, h,w)
+    #     h, w = img.shape
+    #     new_size = max(target_size, h,w)
 
-        # pad to all have new_size
-        padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
-        # align center
-        start_h = (new_size - h)//2
-        start_w = (new_size - w)//2
-        padded_img[start_h:start_h + h, start_w: start_w + w] = img
+    #     # pad to all have new_size
+    #     padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
+    #     # align center
+    #     start_h = (new_size - h)//2
+    #     start_w = (new_size - w)//2
+    #     padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        return padded_img   
+    #     return padded_img   
     

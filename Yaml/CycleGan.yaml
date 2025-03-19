@@ -4,10 +4,10 @@ bidirect: False #Unidirectional or bidirectional
 regist: True    # With or without registration network
 noise_level: 1  #  noise level
 port: 6019   #  port parameters
-save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/try2/' #Cyc + NC+R
-log_root: './output/log/'
+save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/try3/' #Cyc + NC+R
+log_root: './output/log/try3/'
 image_save: './output/img/'
-val_log_path: './output/log2.txt'
+val_log_path: './output/log3.txt'
 
 # lamda weight
 Adv_lamda: 1
@@ -18,7 +18,7 @@ Smooth_lamda: 10
 
 epoch: 0        # starting epoch
 n_epochs: 80       # How often do you want to display output images during training
-batchSize: 32               # size of the batches
+batchSize: 1               # size of the batches
 dataroot: '/home/PET-CT/hachi/pet_phase2/train/'     # root directory of the dataset
 val_dataroot: '/home/PET-CT/hachi/pet_phase2/val/'
 lr: 0.0001                   # initial learning rate
