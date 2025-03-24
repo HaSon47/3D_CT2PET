@@ -52,8 +52,9 @@ class Cyc_Trainer():
 
         # Inputs & targets memory allocation
         Tensor = torch.cuda.FloatTensor if config['cuda'] else torch.Tensor
-        self.input_A = Tensor(config['batchSize'], config['input_nc'], config['size'], config['size'])
-        self.input_B = Tensor(config['batchSize'], config['output_nc'], config['size'], config['size'])
+        self.Tensor = torch.cuda.FloatTensor if config['cuda'] else torch.Tensor
+        # self.input_A = Tensor(config['batchSize'], config['input_nc'], config['size'], config['size'])
+        # self.input_B = Tensor(config['batchSize'], config['output_nc'], config['size'], config['size'])
         self.target_real = Variable(Tensor(config['batchSize'],1).fill_(1.0), requires_grad=False)
         self.target_fake = Variable(Tensor(config['batchSize'],1).fill_(0.0), requires_grad=False)
 
@@ -93,8 +94,10 @@ class Cyc_Trainer():
             tbar = tqdm(enumerate(self.dataloader), total=len(self.dataloader), desc=f"Epoch {epoch}/{self.config['n_epochs']}", leave=True)
             for i, batch in tbar:
                 # Set model input
-                real_A = Variable(self.input_A.copy_(batch['A']))
-                real_B = Variable(self.input_B.copy_(batch['B']))
+                input_A = self.Tensor(self.config['batchSize'], 1, batch['A'].shape[2], batch['A'].shape[3])
+                input_B = self.Tensor(self.config['batchSize'], 1, batch['A'].shape[2], batch['A'].shape[3])
+                real_A = Variable(input_A.copy_(batch['A']))
+                real_B = Variable(input_B.copy_(batch['B']))
                 if self.config['bidirect']:   # C dir
                     if self.config['regist']:    #C + R
                         self.optimizer_R_A.zero_grad()
@@ -269,11 +272,12 @@ class Cyc_Trainer():
                 # self.logger.log({'loss_D_B': loss_D_B,'SR_loss':SR_loss})
             
             # Save models checkpoints
-            if (epoch % 4 == 0):
-                torch.save(self.netG_A2B.state_dict(), f"{self.config['save_root']}netG_A2B_epoch{epoch}.pth")
+            # if (epoch % 2 == 0):
+            torch.save(self.netG_A2B.state_dict(), f"{self.config['save_root']}netG_A2B_epoch{epoch}.pth")
             
             
             # #############val###############
+
             # with torch.no_grad():
             #     MAE = 0
             #     num = 0
@@ -281,29 +285,16 @@ class Cyc_Trainer():
             #         real_A = Variable(self.input_A.copy_(batch['A']))
             #         real_B = Variable(self.input_B.copy_(batch['B'])).detach().cpu().numpy().squeeze()
             #         fake_B = self.netG_A2B(real_A).detach().cpu().numpy().squeeze()
-            #         mae = self.MAE(fake_B,real_B)
+            #         mae = self.MAE(fake_B, real_B)
             #         MAE += mae
             #         num += 1
 
-            #     print ('Val MAE:',MAE/num)
+            #     val_mae = MAE / num
+            #     print('Val MAE:', val_mae)
 
-            with torch.no_grad():
-                MAE = 0
-                num = 0
-                for i, batch in enumerate(self.val_data):
-                    real_A = Variable(self.input_A.copy_(batch['A']))
-                    real_B = Variable(self.input_B.copy_(batch['B'])).detach().cpu().numpy().squeeze()
-                    fake_B = self.netG_A2B(real_A).detach().cpu().numpy().squeeze()
-                    mae = self.MAE(fake_B, real_B)
-                    MAE += mae
-                    num += 1
-
-                val_mae = MAE / num
-                print('Val MAE:', val_mae)
-
-                # Lưu vào file
-                with open(self.config["val_log_path"], "a") as f:
-                    f.write(f"Epoch {epoch}: Val MAE = {val_mae}\n")
+            #     # Lưu vào file
+            #     with open(self.config["val_log_path"], "a") as f:
+            #         f.write(f"Epoch {epoch}: Val MAE = {val_mae}\n")
                 
         self.logger.close()      
                          

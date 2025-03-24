@@ -25,6 +25,10 @@ class ImageDataset(Dataset):
         A_path = self.files_A[index % len(self.files_A)]
         A_image = np.load(A_path, allow_pickle=True)
         B_image = np.load(B_path, allow_pickle=True)
+
+        # Resize
+        A_image = self.pad_to_4(A_image)
+        B_image = self.pad_to_4(B_image)
         
         # Min-max normalization
         A_image = (A_image - np.min(A_image)) / (np.max(A_image) - np.min(A_image))
@@ -33,10 +37,6 @@ class ImageDataset(Dataset):
         # Scale to (-1, 1)
         A_image = (A_image * 2.0) - 1.0
         B_image = (B_image * 2.0) - 1.0
-
-        # # Resize
-        # A_image = self.pad_to_same_size(A_image)
-        # B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -47,20 +47,15 @@ class ImageDataset(Dataset):
     
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
-   
-    # def pad_to_same_size(self, img, target_size=512, pad_value=0):
         
-    #     h, w = img.shape
-    #     new_size = max(target_size, h,w)
-
-    #     # pad to all have new_size
-    #     padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
-    #     # align center
-    #     start_h = (new_size - h)//2
-    #     start_w = (new_size - w)//2
-    #     padded_img[start_h:start_h + h, start_w: start_w + w] = img
-        
-    #     return padded_img   
+    def pad_to_4(self, img, pad_value=0): # img shape h x 256
+        h, w = img.shape 
+        if (h<256):
+            pad_h = 256 - h
+        else:
+            pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+        padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=pad_value)
+        return padded_image  
 
 
 class ValDataset(Dataset):
@@ -77,6 +72,10 @@ class ValDataset(Dataset):
         
         A_image = np.load(A_path, allow_pickle=True)
         B_image = np.load(B_path, allow_pickle=True)
+
+        # Resize
+        A_image = self.pad_to_4(A_image)
+        B_image = self.pad_to_4(B_image)
         
             
         # Min-max normalization
@@ -86,10 +85,6 @@ class ValDataset(Dataset):
         # Scale to (-1, 1)
         A_image = (A_image * 2.0) - 1.0
         B_image = (B_image * 2.0) - 1.0
-
-        # # Resize
-        # A_image = self.pad_to_same_size(A_image)
-        # B_image = self.pad_to_same_size(B_image)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -100,18 +95,10 @@ class ValDataset(Dataset):
         return {'A': A_image, 'B': B_image, 'base_name': os.path.basename(A_path)}
     def __len__(self):
         return max(len(self.files_A), len(self.files_B))
-    
-    # def pad_to_same_size(self, img, target_size=512, pad_value=0):
-        
-    #     h, w = img.shape
-    #     new_size = max(target_size, h,w)
-
-    #     # pad to all have new_size
-    #     padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
-    #     # align center
-    #     start_h = (new_size - h)//2
-    #     start_w = (new_size - w)//2
-    #     padded_img[start_h:start_h + h, start_w: start_w + w] = img
-        
-    #     return padded_img   
+       
+    def pad_to_4(self, img, pad_value=0): # img shape h x 256
+        h, w = img.shape 
+        pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+        padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=pad_value)
+        return padded_image  
     
