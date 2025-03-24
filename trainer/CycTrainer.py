@@ -18,6 +18,7 @@ from .transformer import Transformer_2D
 from skimage import measure
 import numpy as np
 import cv2
+from PIL import Image
 from tqdm import tqdm
 
 # use tensorboard 
@@ -305,7 +306,87 @@ class Cyc_Trainer():
                 with open(self.config["val_log_path"], "a") as f:
                     f.write(f"Epoch {epoch}: Val MAE = {val_mae}\n")
                 
-        self.logger.close()      
+        self.logger.close() 
+
+    def _3D_inference(self, patient_list, result_path):
+        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch8.pth'))
+
+        def pad_to_same_size(img, target_size=512, pad_value=0):
+        
+            h, w = img.shape
+            new_size = max(target_size, h,w)
+
+            # pad to all have new_size
+            padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
+            # align center
+            start_h = (new_size - h)//2
+            start_w = (new_size - w)//2
+            padded_img[start_h:start_h + h, start_w: start_w + w] = img
+            
+            return padded_img   
+        
+        def preprocess(ct_slice): # ct_voxel: W * H (512 * 512)
+            transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.ToTensor()
+            ])
+            ct_slice = (ct_slice - ct_slice.min())/(ct_slice.max() - ct_slice.min())
+            ct_slice = (ct_slice - 0.5)*2
+            #ct_slice = pad_to_same_size(ct_slice, pad_value=-1.0)
+            ct_slice = pad_to_same_size(ct_slice)
+            
+            A_image = Image.fromarray(ct_slice)
+            A_image = transform(A_image)
+           
+            return A_image
+        
+        def postprocess(fake_B, max_pixel = 32767):
+            fake_B = fake_B.detach().cpu().numpy().squeeze()  
+            image = fake_B
+            image = (image * 0.5 + 0.5).clip(0, 1)
+            image = (image * max_pixel).clip(0, max_pixel)
+            return image
+
+
+
+        # Duyệt qua từng thư mục bệnh nhân trong DATA_PATH
+        for patient_folder in tqdm(patient_list):
+            patient_path = patient_folder
+            
+            # Kiểm tra xem có phải là thư mục không
+            if os.path.isdir(patient_path):
+                # Tìm file pet.npy bên trong thư mục bệnh nhân
+                pet_file_path = os.path.join(patient_path, 'predicted_volume.npy')
+                
+                # Kiểm tra tệp có tồn tại hay không
+                if os.path.exists(pet_file_path):
+                    pet_img = np.load(pet_file_path, allow_pickle=True)
+                    predicted_slices = []
+
+                    # Lặp qua các lát cắt để dự đoán
+                    
+                    for i in tqdm(range(pet_img.shape[1])):
+                        pet_slice = pet_img[:, i, :]
+                        A_image = preprocess(pet_slice).unsqueeze(0)
+                        #print(A_image.unsqueeze(0).shape)
+                        #print(A_image.max(), A_image.min())
+                        real_A = Variable(self.input_A.copy_(A_image))
+                        fake_B = self.netG_A2B(real_A)
+                        #print(fake_B.max(), fake_B.min())
+                        fake_B = postprocess(fake_B)
+                        predicted_slices.append(fake_B)
+                    # Chuyển danh sách các lát cắt đã dự đoán thành một khối 3D numpy array
+                    predicted_volume = np.stack(predicted_slices, axis=1)
+                    print(predicted_volume.shape)
+
+                    # Tạo thư mục kết quả riêng cho bệnh nhân nếu chưa tồn tại
+                    patient_result_path = os.path.join(result_path, os.path.basename(patient_folder))
+                    os.makedirs(patient_result_path, exist_ok=True)
+                    # print(f"Saving result to {patient_result_path}")
+                    # Lưu kết quả dự đoán vào thư mục của bệnh nhân
+                    output_file_path = os.path.join(patient_result_path, 'phase2_pet_ep8.npy')
+                    np.save(output_file_path, predicted_volume)
+                    print(f"Saved predicted volume to {output_file_path}")   
                          
     def test(self,):
         self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B.pth'))

@@ -36,8 +36,8 @@ class ImageDataset(Dataset):
         B_image = (B_image * 2.0) - 1.0
 
         # Resize
-        A_image = self.pad_to_same_size(A_image)
-        B_image = self.pad_to_same_size(B_image)
+        A_image = self.pad_to_same_size(A_image, pad_value= -1.0)
+        B_image = self.pad_to_same_size(B_image, pad_value=-1.0)
         
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
@@ -61,7 +61,14 @@ class ImageDataset(Dataset):
         start_w = (new_size - w)//2
         padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        return padded_img   
+        return padded_img 
+    
+    def pad_to_4(self, img):
+        h, w = img.shape
+        pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+        padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=0)
+        return padded_image
+
 
 
 class ValDataset(Dataset):
@@ -79,7 +86,6 @@ class ValDataset(Dataset):
         
         A_image = np.load(A_path, allow_pickle=True)
         B_image = np.load(B_path, allow_pickle=True)
-        
             
         # Min-max normalization
         A_image = (A_image - np.min(A_image)) / (np.max(A_image) - np.min(A_image))
@@ -90,9 +96,9 @@ class ValDataset(Dataset):
         B_image = (B_image * 2.0) - 1.0
 
         # Resize
-        A_image = self.pad_to_same_size(A_image)
-        B_image = self.pad_to_same_size(B_image)
-        
+        A_image = self.pad_to_same_size(A_image, pad_value=-1.0)
+        B_image = self.pad_to_same_size(B_image, pad_value= -1.0)
+
         A_image = Image.fromarray(A_image)
         B_image = Image.fromarray(B_image)
         A_image = self.transform(A_image)
@@ -115,5 +121,12 @@ class ValDataset(Dataset):
         start_w = (new_size - w)//2
         padded_img[start_h:start_h + h, start_w: start_w + w] = img
         
-        return padded_img   
+        return padded_img
+
+    def pad_to_4(self, img):
+        h, w = img.shape
+        pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+        padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=0)
+        return padded_image
+   
     

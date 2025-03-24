@@ -1,0 +1,1 @@
+/home/PET-CT/huutien/Reg-GAN/hachi/data_dienbien/pet_npy/25084604910/0005
