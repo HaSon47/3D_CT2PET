@@ -36,7 +36,7 @@ def main():
     with open(txt_list_patients) as f:
         lines = f.readlines()
         patient_list = [x.strip() for x in lines]
-    out_inperences = '/home/PET-CT/huutien/Reg-GAN/hachi/data_dienbien/pet_npy/25084604910'
+    out_inperences = '/home/PET-CT/huutien/Reg-GAN/hachi/data_dienbien/pet_npy/20095316797'
     trainer._3D_inference(patient_list, out_inperences)
     
     

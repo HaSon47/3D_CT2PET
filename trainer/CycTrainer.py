@@ -309,31 +309,28 @@ class Cyc_Trainer():
         self.logger.close() 
 
     def _3D_inference(self, patient_list, result_path):
-        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch8.pth'))
+        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch3.pth'))
 
-        def pad_to_same_size(img, target_size=512, pad_value=0):
-        
-            h, w = img.shape
-            new_size = max(target_size, h,w)
+        def pad_to_4(self, img, pad_value=0): # img shape h x 256
+            h, w = img.shape 
+            if (h<256):
+                pad_h = 256 - h
+            else:
+                pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+            padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=pad_value)
+            return padded_image  
 
-            # pad to all have new_size
-            padded_img = np.full((new_size, new_size), pad_value, dtype=img.dtype)
-            # align center
-            start_h = (new_size - h)//2
-            start_w = (new_size - w)//2
-            padded_img[start_h:start_h + h, start_w: start_w + w] = img
-            
-            return padded_img   
         
         def preprocess(ct_slice): # ct_voxel: W * H (512 * 512)
             transform = transforms.Compose([
             transforms.Resize(256),
             transforms.ToTensor()
             ])
+            ct_slice = pad_to_4(ct_slice)
             ct_slice = (ct_slice - ct_slice.min())/(ct_slice.max() - ct_slice.min())
             ct_slice = (ct_slice - 0.5)*2
             #ct_slice = pad_to_same_size(ct_slice, pad_value=-1.0)
-            ct_slice = pad_to_same_size(ct_slice)
+            
             
             A_image = Image.fromarray(ct_slice)
             A_image = transform(A_image)
