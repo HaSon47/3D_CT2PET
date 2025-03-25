@@ -5,7 +5,7 @@ import os
 from trainer import Cyc_Trainer,Nice_Trainer,P2p_Trainer,Munit_Trainer,Unit_Trainer
 import yaml
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 
 def get_config(config):
     with open(config, 'r') as stream:
