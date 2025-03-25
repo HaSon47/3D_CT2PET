@@ -4,8 +4,8 @@ bidirect: False #Unidirectional or bidirectional
 regist: True    # With or without registration network
 noise_level: 1  #  noise level
 port: 6019   #  port parameters
-save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/try3.1/' #Cyc + NC+R
-log_root: './output/log/try3.1/'
+save_root: '/home/PET-CT/hachi/Reg-GAN/Checkpoint/phase2/sagittal/' #Cyc + NC+R
+log_root: './output/log/sagittal/'
 image_save: './output/img/'
 val_log_path: './output/log3_1.txt'
 

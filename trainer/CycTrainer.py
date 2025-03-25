@@ -18,6 +18,7 @@ from .transformer import Transformer_2D
 from skimage import measure
 import numpy as np
 import cv2
+from PIL import Image
 from tqdm import tqdm
 
 # use tensorboard 
@@ -79,8 +80,7 @@ class Cyc_Trainer():
         os.makedirs(os.path.dirname(self.config["val_log_path"]), exist_ok=True)
 
  
-    #    # Loss plot
-    #     self.logger = Logger(config['name'],config['port'],config['n_epochs'], len(self.dataloader))   
+    #    # Loss plot  
         #  use tensorboard
         self.logger = SummaryWriter(log_dir = config['log_root'])
         os.makedirs(config['log_root'], exist_ok=True)    
@@ -94,175 +94,51 @@ class Cyc_Trainer():
             tbar = tqdm(enumerate(self.dataloader), total=len(self.dataloader), desc=f"Epoch {epoch}/{self.config['n_epochs']}", leave=True)
             for i, batch in tbar:
                 # Set model input
-                input_A = self.Tensor(self.config['batchSize'], 1, batch['A'].shape[2], batch['A'].shape[3])
-                input_B = self.Tensor(self.config['batchSize'], 1, batch['A'].shape[2], batch['A'].shape[3])
-                real_A = Variable(input_A.copy_(batch['A']))
-                real_B = Variable(input_B.copy_(batch['B']))
-                if self.config['bidirect']:   # C dir
-                    if self.config['regist']:    #C + R
-                        self.optimizer_R_A.zero_grad()
-                        self.optimizer_G.zero_grad()
-                        # GAN loss
-                        fake_B = self.netG_A2B(real_A)
-                        pred_fake = self.netD_B(fake_B)
-                        loss_GAN_A2B = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_real)
-                        
-                        fake_A = self.netG_B2A(real_B)
-                        pred_fake = self.netD_A(fake_A)
-                        loss_GAN_B2A = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_real)
-                        
-                        Trans = self.R_A(fake_B,real_B) 
-                        SysRegist_A2B = self.spatial_transform(fake_B,Trans)
-                        SR_loss = self.config['Corr_lamda'] * self.L1_loss(SysRegist_A2B,real_B)###SR
-                        SM_loss = self.config['Smooth_lamda'] * smooothing_loss(Trans)
-                        
-                        # Cycle loss
-                        recovered_A = self.netG_B2A(fake_B)
-                        loss_cycle_ABA = self.config['Cyc_lamda'] * self.L1_loss(recovered_A, real_A)
+                real_A = batch['A'].cuda().float()  # Giả sử batch['A'] đã ở dạng tensor
+                real_B = batch['B'].cuda().float()
+                # regist
+                self.optimizer_R_A.zero_grad()
+                self.optimizer_G.zero_grad()
+                #### regist sys loss
+                fake_B = self.netG_A2B(real_A)
+                Trans = self.R_A(fake_B,real_B) 
+                SysRegist_A2B = self.spatial_transform(fake_B,Trans)
+                SR_loss = self.config['Corr_lamda'] * self.L1_loss(SysRegist_A2B,real_B)###SR
+                pred_fake0 = self.netD_B(fake_B)
+                adv_loss = self.config['Adv_lamda'] * self.MSE_loss(pred_fake0, self.target_real)
+                ####smooth loss
+                SM_loss = self.config['Smooth_lamda'] * smooothing_loss(Trans)
+                toal_loss = SM_loss+adv_loss+SR_loss
+                toal_loss.backward()
 
-                        recovered_B = self.netG_A2B(fake_A)
-                        loss_cycle_BAB = self.config['Cyc_lamda'] * self.L1_loss(recovered_B, real_B)
+                # Cleanup
+                del fake_B, Trans, SysRegist_A2B, pred_fake0
+                torch.cuda.empty_cache()
 
-                        # Total loss
-                        loss_Total = loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB + SR_loss +SM_loss
-                        loss_Total.backward()
-                        self.optimizer_G.step()
-                        self.optimizer_R_A.step()
-                        
-                        ###### Discriminator A ######
-                        self.optimizer_D_A.zero_grad()
-                        # Real loss
-                        pred_real = self.netD_A(real_A)
-                        loss_D_real = self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
-                        # Fake loss
-                        fake_A = self.fake_A_buffer.push_and_pop(fake_A)
-                        pred_fake = self.netD_A(fake_A.detach())
-                        loss_D_fake = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_fake)
+                epoch_loss += toal_loss.item()
+                self.optimizer_R_A.step()
+                self.optimizer_G.step()
+                self.optimizer_D_B.zero_grad()
 
-                        # Total loss
-                        loss_D_A = (loss_D_real + loss_D_fake)
-                        loss_D_A.backward()
-
-                        self.optimizer_D_A.step()
-                        ###################################
-
-                        ###### Discriminator B ######
-                        self.optimizer_D_B.zero_grad()
-
-                        # Real loss
-                        pred_real = self.netD_B(real_B)
-                        loss_D_real = self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
-
-                        # Fake loss
-                        fake_B = self.fake_B_buffer.push_and_pop(fake_B)
-                        pred_fake = self.netD_B(fake_B.detach())
-                        loss_D_fake = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_fake)
-
-                        # Total loss
-                        loss_D_B = (loss_D_real + loss_D_fake)
-                        loss_D_B.backward()
-
-                        self.optimizer_D_B.step()
-                        ################################### 
-                    
-                    else: #only  dir:  C
-                        self.optimizer_G.zero_grad()
-                        # GAN loss
-                        fake_B = self.netG_A2B(real_A)
-                        pred_fake = self.netD_B(fake_B)
-                        loss_GAN_A2B = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_real)
-
-                        fake_A = self.netG_B2A(real_B)
-                        pred_fake = self.netD_A(fake_A)
-                        loss_GAN_B2A = self.config['Adv_lamda']*self.MSE_loss(pred_fake, self.target_real)
-
-                        # Cycle loss
-                        recovered_A = self.netG_B2A(fake_B)
-                        loss_cycle_ABA = self.config['Cyc_lamda'] * self.L1_loss(recovered_A, real_A)
-
-                        recovered_B = self.netG_A2B(fake_A)
-                        loss_cycle_BAB = self.config['Cyc_lamda'] * self.L1_loss(recovered_B, real_B)
-
-                        # Total loss
-                        loss_Total = loss_GAN_A2B + loss_GAN_B2A + loss_cycle_ABA + loss_cycle_BAB
-                        loss_Total.backward()
-                        self.optimizer_G.step()
-
-                        ###### Discriminator A ######
-                        self.optimizer_D_A.zero_grad()
-                        # Real loss
-                        pred_real = self.netD_A(real_A)
-                        loss_D_real = self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
-                        # Fake loss
-                        fake_A = self.fake_A_buffer.push_and_pop(fake_A)
-                        pred_fake = self.netD_A(fake_A.detach())
-                        loss_D_fake = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_fake)
-
-                        # Total loss
-                        loss_D_A = (loss_D_real + loss_D_fake)
-                        loss_D_A.backward()
-
-                        self.optimizer_D_A.step()
-                        ###################################
-
-                        ###### Discriminator B ######
-                        self.optimizer_D_B.zero_grad()
-
-                        # Real loss
-                        pred_real = self.netD_B(real_B)
-                        loss_D_real = self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
-
-                        # Fake loss
-                        fake_B = self.fake_B_buffer.push_and_pop(fake_B)
-                        pred_fake = self.netD_B(fake_B.detach())
-                        loss_D_fake = self.config['Adv_lamda'] * self.MSE_loss(pred_fake, self.target_fake)
-
-                        # Total loss
-                        loss_D_B = (loss_D_real + loss_D_fake)
-                        loss_D_B.backward()
-
-                        self.optimizer_D_B.step()
-                        ###################################
-                        
-                        
-                        
-                else:                  # s dir :NC
-                    if self.config['regist']:    # NC+R
-                        self.optimizer_R_A.zero_grad()
-                        self.optimizer_G.zero_grad()
-                        #### regist sys loss
-                        fake_B = self.netG_A2B(real_A)
-                        Trans = self.R_A(fake_B,real_B) 
-                        SysRegist_A2B = self.spatial_transform(fake_B,Trans)
-                        SR_loss = self.config['Corr_lamda'] * self.L1_loss(SysRegist_A2B,real_B)###SR
-                        pred_fake0 = self.netD_B(fake_B)
-                        adv_loss = self.config['Adv_lamda'] * self.MSE_loss(pred_fake0, self.target_real)
-                        ####smooth loss
-                        SM_loss = self.config['Smooth_lamda'] * smooothing_loss(Trans)
-                        toal_loss = SM_loss+adv_loss+SR_loss
-                        toal_loss.backward()
-                        epoch_loss += toal_loss.item()
-                        self.optimizer_R_A.step()
-                        self.optimizer_G.step()
-                        self.optimizer_D_B.zero_grad()
-                        with torch.no_grad():
-                            fake_B = self.netG_A2B(real_A)
-                        pred_fake0 = self.netD_B(fake_B)
-                        pred_real = self.netD_B(real_B)
-                        loss_D_B = self.config['Adv_lamda'] * self.MSE_loss(pred_fake0, self.target_fake)+self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
+                with torch.no_grad():
+                    fake_B = self.netG_A2B(real_A)
+                pred_fake0 = self.netD_B(fake_B)
+                pred_real = self.netD_B(real_B)
+                loss_D_B = self.config['Adv_lamda'] * self.MSE_loss(pred_fake0, self.target_fake)+self.config['Adv_lamda'] * self.MSE_loss(pred_real, self.target_real)
 
 
-                        loss_D_B.backward()
-                        self.optimizer_D_B.step()
-                        
-                        
-                    # log to tensorboard
-                    self.logger.add_scalar('SM_loss', SM_loss.item(), epoch * len(self.dataloader) + i)
-                    self.logger.add_scalar('adv_loss', adv_loss.item(), epoch * len(self.dataloader) + i)
-                    self.logger.add_scalar('SR_loss', SR_loss.item(), epoch * len(self.dataloader) + i)
-                    self.logger.add_scalar('toal_loss', toal_loss.item(), epoch * len(self.dataloader) + i)
+                loss_D_B.backward()
+                self.optimizer_D_B.step()
 
-                tbar.set_postfix(loss=epoch_loss)
+                # Cleanup tiếp
+                del fake_B, pred_fake0, pred_real
+                torch.cuda.empty_cache()
+                             
+                # log to tensorboard
+                if i % 30 == 0:
+                    with torch.no_grad():
+                        step = epoch * len(self.dataloader) + i
+                        self.logger.add_scalar('toal_loss', toal_loss.detach().item(), step)
 
             self.logger.add_scalar('epoch_loss', epoch_loss, epoch)
             tbar.close()
@@ -275,28 +151,87 @@ class Cyc_Trainer():
             # if (epoch % 2 == 0):
             torch.save(self.netG_A2B.state_dict(), f"{self.config['save_root']}netG_A2B_epoch{epoch}.pth")
             
-            
-            # #############val###############
-
-            # with torch.no_grad():
-            #     MAE = 0
-            #     num = 0
-            #     for i, batch in enumerate(self.val_data):
-            #         real_A = Variable(self.input_A.copy_(batch['A']))
-            #         real_B = Variable(self.input_B.copy_(batch['B'])).detach().cpu().numpy().squeeze()
-            #         fake_B = self.netG_A2B(real_A).detach().cpu().numpy().squeeze()
-            #         mae = self.MAE(fake_B, real_B)
-            #         MAE += mae
-            #         num += 1
-
-            #     val_mae = MAE / num
-            #     print('Val MAE:', val_mae)
-
-            #     # Lưu vào file
-            #     with open(self.config["val_log_path"], "a") as f:
-            #         f.write(f"Epoch {epoch}: Val MAE = {val_mae}\n")
                 
-        self.logger.close()      
+        self.logger.close()   
+
+    def _3D_inference(self, patient_list, result_path):
+        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch3.pth'))
+
+        def pad_to_4(img, pad_value=0): # img shape h x 256
+            h, w = img.shape 
+            if (h<256):
+                pad_h = 256 - h
+            else:
+                pad_h = (4 - (h % 4)) % 4  # Số hàng cần padding để h chia hết cho 4
+            padded_image = np.pad(img, ((0, pad_h), (0, 0)), mode='constant', constant_values=pad_value)
+            return padded_image  
+
+        
+        def preprocess(ct_slice): # ct_voxel: W * H (512 * 512)
+            transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.ToTensor()
+            ])
+            ct_slice = pad_to_4(ct_slice)
+            ct_slice = (ct_slice - ct_slice.min())/(ct_slice.max() - ct_slice.min())
+            ct_slice = (ct_slice - 0.5)*2
+            #ct_slice = pad_to_same_size(ct_slice, pad_value=-1.0)
+            
+            
+            A_image = Image.fromarray(ct_slice)
+            A_image = transform(A_image)
+           
+            return A_image
+        
+        def postprocess(fake_B, max_pixel = 32767):
+            fake_B = fake_B.detach().cpu().numpy().squeeze()  
+            image = fake_B
+            image = (image * 0.5 + 0.5).clip(0, 1)
+            image = (image * max_pixel).clip(0, max_pixel)
+            return image
+
+
+
+        # Duyệt qua từng thư mục bệnh nhân trong DATA_PATH
+        for patient_folder in tqdm(patient_list):
+            patient_path = patient_folder
+            
+            # Kiểm tra xem có phải là thư mục không
+            if os.path.isdir(patient_path):
+                # Tìm file pet.npy bên trong thư mục bệnh nhân
+                pet_file_path = os.path.join(patient_path, 'phase1_pet.npy')
+                
+                # Kiểm tra tệp có tồn tại hay không
+                if os.path.exists(pet_file_path):
+                    pet_img = np.load(pet_file_path, allow_pickle=True)
+                    predicted_slices = []
+
+                    # Lặp qua các lát cắt để dự đoán
+                    
+                    for i in tqdm(range(pet_img.shape[1])):
+                        pet_slice = pet_img[:, i, :]
+                        A_image = preprocess(pet_slice).unsqueeze(0)
+                        #print(A_image.shape)
+                        #print(A_image.unsqueeze(0).shape)
+                        #print(A_image.max(), A_image.min())
+                        input_A = self.Tensor(self.config['batchSize'], 1, A_image.shape[2], A_image.shape[3])
+                        real_A = Variable(input_A.copy_(A_image))
+                        fake_B = self.netG_A2B(real_A)
+                        #print(fake_B.max(), fake_B.min())
+                        fake_B = postprocess(fake_B)
+                        predicted_slices.append(fake_B)
+                    # Chuyển danh sách các lát cắt đã dự đoán thành một khối 3D numpy array
+                    predicted_volume = np.stack(predicted_slices, axis=1)
+                    print(predicted_volume.shape)
+
+                    # Tạo thư mục kết quả riêng cho bệnh nhân nếu chưa tồn tại
+                    patient_result_path = os.path.join(result_path, os.path.basename(patient_folder))
+                    os.makedirs(patient_result_path, exist_ok=True)
+                    # print(f"Saving result to {patient_result_path}")
+                    # Lưu kết quả dự đoán vào thư mục của bệnh nhân
+                    output_file_path = os.path.join(patient_result_path, 'coronal_pet_ep3.npy')
+                    np.save(output_file_path, predicted_volume)
+                    print(f"Saved predicted volume to {output_file_path}")      
                          
     def test(self,):
         self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B.pth'))
