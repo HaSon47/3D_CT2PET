@@ -28,6 +28,7 @@ class Cyc_Trainer():
     def __init__(self, config):
         super().__init__()
         self.config = config
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         ## def networks
         self.netG_A2B = Generator(config['input_nc'], config['output_nc']).cuda()
         self.netD_B = Discriminator(config['input_nc']).cuda()
@@ -155,7 +156,7 @@ class Cyc_Trainer():
         self.logger.close()   
 
     def _3D_inference(self, patient_list, result_path):
-        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch3.pth'))
+        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch8.pth'))
 
         def pad_to_4(img, pad_value=0): # img shape h x 256
             h, w = img.shape 
@@ -169,8 +170,7 @@ class Cyc_Trainer():
         
         def preprocess(ct_slice): # ct_voxel: W * H (512 * 512)
             transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.ToTensor()
+                transforms.ToTensor()
             ])
             ct_slice = pad_to_4(ct_slice)
             ct_slice = (ct_slice - ct_slice.min())/(ct_slice.max() - ct_slice.min())
@@ -199,27 +199,24 @@ class Cyc_Trainer():
             # Kiểm tra xem có phải là thư mục không
             if os.path.isdir(patient_path):
                 # Tìm file pet.npy bên trong thư mục bệnh nhân
-                pet_file_path = os.path.join(patient_path, 'phase1_pet.npy')
+                pet_file_path = os.path.join(patient_path, 'predicted_pet_1.npy')
                 
                 # Kiểm tra tệp có tồn tại hay không
                 if os.path.exists(pet_file_path):
                     pet_img = np.load(pet_file_path, allow_pickle=True)
+                    c,_,w = pet_img.shape
                     predicted_slices = []
 
                     # Lặp qua các lát cắt để dự đoán
-                    
-                    for i in tqdm(range(pet_img.shape[1])):
-                        pet_slice = pet_img[:, i, :]
-                        A_image = preprocess(pet_slice).unsqueeze(0)
-                        #print(A_image.shape)
-                        #print(A_image.unsqueeze(0).shape)
-                        #print(A_image.max(), A_image.min())
-                        input_A = self.Tensor(self.config['batchSize'], 1, A_image.shape[2], A_image.shape[3])
-                        real_A = Variable(input_A.copy_(A_image))
-                        fake_B = self.netG_A2B(real_A)
-                        #print(fake_B.max(), fake_B.min())
-                        fake_B = postprocess(fake_B)
-                        predicted_slices.append(fake_B)
+                    with torch.no_grad():
+                        for i in tqdm(range(pet_img.shape[1])):
+                            pet_slice = pet_img[:, i, :]
+                            A_image = preprocess(pet_slice).unsqueeze(0)
+                            real_A = A_image.cuda()
+                            fake_B = self.netG_A2B(real_A)
+                            fake_B = postprocess(fake_B)
+                            fake_B = fake_B[:c, :w]
+                            predicted_slices.append(fake_B)
                     # Chuyển danh sách các lát cắt đã dự đoán thành một khối 3D numpy array
                     predicted_volume = np.stack(predicted_slices, axis=1)
                     print(predicted_volume.shape)
@@ -229,7 +226,7 @@ class Cyc_Trainer():
                     os.makedirs(patient_result_path, exist_ok=True)
                     # print(f"Saving result to {patient_result_path}")
                     # Lưu kết quả dự đoán vào thư mục của bệnh nhân
-                    output_file_path = os.path.join(patient_result_path, 'coronal_pet_ep3.npy')
+                    output_file_path = os.path.join(patient_result_path, 'coronal_ep8.npy')
                     np.save(output_file_path, predicted_volume)
                     print(f"Saved predicted volume to {output_file_path}")      
                          
