@@ -13,7 +13,7 @@ import cv2
 
 
 class ImageDataset(Dataset):
-    def __init__(self, root, crop_scale=0.75, flip_prob=0.8):
+    def __init__(self, root, crop_scale=0.70, flip_prob=0.8):
         self.transform = transforms.Compose([
             transforms.ToTensor()
         ])
