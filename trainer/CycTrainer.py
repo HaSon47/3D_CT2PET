@@ -156,7 +156,7 @@ class Cyc_Trainer():
         self.logger.close()   
 
     def _3D_inference(self, patient_list, result_path):
-        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch8.pth'))
+        self.netG_A2B.load_state_dict(torch.load(self.config['save_root'] + 'netG_A2B_epoch15.pth'))
 
         def pad_to_4(img, pad_value=0): # img shape h x 256
             h, w = img.shape 
@@ -199,7 +199,7 @@ class Cyc_Trainer():
             # Kiểm tra xem có phải là thư mục không
             if os.path.isdir(patient_path):
                 # Tìm file pet.npy bên trong thư mục bệnh nhân
-                pet_file_path = os.path.join(patient_path, 'predicted_pet_1.npy')
+                pet_file_path = os.path.join(patient_path, 'phase1_pet.npy')
                 
                 # Kiểm tra tệp có tồn tại hay không
                 if os.path.exists(pet_file_path):
@@ -226,7 +226,7 @@ class Cyc_Trainer():
                     os.makedirs(patient_result_path, exist_ok=True)
                     # print(f"Saving result to {patient_result_path}")
                     # Lưu kết quả dự đoán vào thư mục của bệnh nhân
-                    output_file_path = os.path.join(patient_result_path, 'coronal_ep8.npy')
+                    output_file_path = os.path.join(patient_result_path, 'coronal_ep15.npy')
                     np.save(output_file_path, predicted_volume)
                     print(f"Saved predicted volume to {output_file_path}")      
                          
